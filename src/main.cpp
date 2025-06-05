@@ -99,6 +99,7 @@ void setup() {
 void loop() {
   
   doWiFiManager();
+  ArduinoOTA.handle();
   // we call the read function inside the loop
   // OTA Handle
   ArduinoOTA.handle();
