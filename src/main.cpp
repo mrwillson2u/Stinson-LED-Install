@@ -31,6 +31,8 @@ void publishColorState();
 #define RX_PIN_B 18
 #define ENABLE_PIN_B 23
 
+#define VERBOS_OUTPUT true
+
 byte dataPrefix[] = {149, 1, 250, 0};
 byte outputDataA[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 byte outputDataB[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -104,8 +106,6 @@ void setup() {
 }
 
 void loop() {
-  
-  doWiFiManager();
   ArduinoOTA.handle();
   doWiFiManager();
   if (!mqttClient.connected()) reconnectMQTT();
@@ -113,7 +113,7 @@ void loop() {
 
   // we call the read function inside the loop
   // OTA Handle
-  ArduinoOTA.handle();
+  
 
   artnet.read();
   // int checksum = calculateChecksum(data, 12);
@@ -212,13 +212,16 @@ void doWiFiManager() {
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
   bool tail = false;
   
-  Serial.print("DMX: Univ: ");
-  Serial.print(universe, DEC);
-  Serial.print(", Seq: ");
-  Serial.print(sequence, DEC);
-  Serial.print(", Data (");
-  Serial.print(length, DEC);
-  Serial.print("): ");
+  if(VERBOS_OUTPUT) {
+    Serial.print("DMX: Univ: ");
+    Serial.print(universe, DEC);
+    Serial.print(", Seq: ");
+    Serial.print(sequence, DEC);
+    Serial.print(", Data (");
+    Serial.print(length, DEC);
+    Serial.print("): ");
+  }
+  
   
   if (length > 16) {
     length = 16;
@@ -228,29 +231,31 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   for (uint16_t i = 0; i < length; i++)
   {
     
-    Serial.print(data[i]);
+    if( VERBOS_OUTPUT ) { Serial.print(data[i]); };
 
     if(i < 8) {
-      Serial.print(" A: ");
+      if( VERBOS_OUTPUT ) { Serial.print(" A: "); };
       outputDataA[i] = data[i];
     }
     else {
-      Serial.print(" B: ");
+      if( VERBOS_OUTPUT ) { Serial.print(" B: "); };
       outputDataB[i - 8] = data[i];
     }
     
 
-    Serial.print(" ");
+    if( VERBOS_OUTPUT ) { Serial.print(" "); };
   }
 
   if (mqttClient.connected()) {
     publishColorState();
   }
-  
+
+  if( VERBOS_OUTPUT ) { 
   if (tail) {
     Serial.print("...");
   }
   Serial.println();
+}
 }
 
 void readFromDHT() {  
