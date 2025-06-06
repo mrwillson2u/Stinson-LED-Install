@@ -3,6 +3,8 @@
 #include <ESPmDNS.h>
 #include <ArtnetWifi.h>
 #include <ArduinoOTA.h>
+#include <PubSubClient.h>
+
 
 #include <dhtnew.h>
 
@@ -17,6 +19,9 @@ int calculateChecksum(const byte *dataBuf, int len);
 void doWiFiManager();
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data);
 void readFromDHT();
+void reconnectMQTT();
+void publishColorState();
+
 
 #define TX_PIN_A 17
 #define RX_PIN_A 16
@@ -31,6 +36,9 @@ byte outputDataA[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 byte outputDataB[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 WiFiManager wm;
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
 
 unsigned int  timeout   = 120; // seconds to run for
 unsigned int  startTime = millis();
@@ -91,15 +99,18 @@ void setup() {
   artnet.setArtDmxCallback(onDmxFrame);
   artnet.begin();
 
-  // dht.setup(27); // data pin 2
-  // dht.begin();
-  // mySensor.setType(11s);
+  mqttClient.setServer("10.0.1.154", 1883); // Replace with your MQTT broker IP
+
 }
 
 void loop() {
   
   doWiFiManager();
   ArduinoOTA.handle();
+  doWiFiManager();
+  if (!mqttClient.connected()) reconnectMQTT();
+  mqttClient.loop();
+
   // we call the read function inside the loop
   // OTA Handle
   ArduinoOTA.handle();
@@ -164,7 +175,7 @@ int calculateChecksum(const byte *dataBuf, int len) {
   return sum % 256;
 }
 
-void doWiFiManager(){
+void doWiFiManager() {
   // is auto timeout portal running
   if(portalRunning){
     wm.process(); // do processing
@@ -198,8 +209,7 @@ void doWiFiManager(){
   }
 }
 
-void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data)
-{
+void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
   bool tail = false;
   
   Serial.print("DMX: Univ: ");
@@ -233,7 +243,9 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
     Serial.print(" ");
   }
 
-
+  if (mqttClient.connected()) {
+    publishColorState();
+  }
   
   if (tail) {
     Serial.print("...");
@@ -289,13 +301,50 @@ void readFromDHT() {
     Serial.print(enclosureHumidity, 1);
     Serial.print(",\t");
     Serial.println(enclosureTemp, 1);
-    // Serial.print(",\t");
-    // uint32_t duration = stop - start;
-    // Serial.print(duration);
-    // Serial.print(",\t");
-    // Serial.println(mySensor.getType());
+    
+    char tempPayload[16];
+    char humPayload[16];
+    dtostrf(enclosureTemp, 5, 2, tempPayload);
+    dtostrf(enclosureHumidity, 5, 2, humPayload);
 
+    bool tempOk = mqttClient.publish("outdoor-led/temp", tempPayload);
+    bool humOk = mqttClient.publish("outdoor-led/humidity", humPayload);
+
+    if( VERBOS_OUTPUT ) { 
+    Serial.printf("Temp publish: %s, Humidity publish: %s\n", tempOk ? "OK" : "FAIL", humOk ? "OK" : "FAIL");
+    }
   }
 
   
 }
+
+void reconnectMQTT() {
+  static unsigned long reconnectMQTTimer = 0;
+  if (!mqttClient.connected() && millis() - reconnectMQTTimer > 5000 ) {
+    Serial.print("Attempting MQTT connection...");
+    if (mqttClient.connect("ESP32Client", "<user>", "<password>")) {
+    // if (mqttClient.connect("ESP32Client", "colin", "AZoJQ$:%P5k@\\CgKkHCKjm^MbT.njfY$aL")) {
+      Serial.println("connected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      
+      // delay(5000);
+    }
+    reconnectMQTTimer = millis();
+  }
+}
+
+void publishColorState() {
+  char buffer[64];
+  snprintf(buffer, sizeof(buffer), "%d,%d,%d,%d,%d,%d,%d,%d",
+           outputDataA[0], outputDataA[1], outputDataA[2], outputDataA[3],
+           outputDataB[0], outputDataB[1], outputDataB[2], outputDataB[3]);
+  bool pubOk = mqttClient.publish("outdoor-led/color", buffer);
+
+  if( VERBOS_OUTPUT ) { 
+    Serial.printf("Color publish: %s\n", pubOk ? "OK" : "FAIL");
+  }
+}
+
