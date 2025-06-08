@@ -4,8 +4,6 @@
 #include <ArtnetWifi.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
-
-
 #include <dhtnew.h>
 
 DHTNEW mySensor(27);   //  ESP 16    UNO 5    MKR1010 5
@@ -110,6 +108,11 @@ void loop() {
   doWiFiManager();
   if (!mqttClient.connected()) reconnectMQTT();
   mqttClient.loop();
+
+  if(mqttClient.connected()) {
+    mqttClient.publish("debug/logs", "LOOP");
+
+  }
 
   // we call the read function inside the loop
   // OTA Handle
