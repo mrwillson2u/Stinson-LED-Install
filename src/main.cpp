@@ -5,6 +5,7 @@
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
 #include <dhtnew.h>
+#include <WiFiUdp.h>
 
 DHTNEW mySensor(27);   //  ESP 16    UNO 5    MKR1010 5
 // select which pin will trigger the configuration portal when set to LOW
@@ -19,6 +20,7 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
 void readFromDHT();
 void reconnectMQTT();
 void publishColorState();
+void logRemote(const String& message);
 
 
 #define TX_PIN_A 17
@@ -39,6 +41,9 @@ WiFiManager wm;
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
+WiFiUDP udp;
+const char* remote_syslog_ip = "100.85.112.66";  // your dev machine
+const int remote_syslog_port = 4210;
 
 unsigned int  timeout   = 120; // seconds to run for
 unsigned int  startTime = millis();
@@ -77,6 +82,7 @@ void setup() {
 
   delay(1000);
   Serial.println("\n Starting");
+  logRemote("\n Starting");
 
   pinMode(TRIGGER_PIN, INPUT_PULLUP); 
   pinMode(ENABLE_PIN_A, OUTPUT);
@@ -106,6 +112,7 @@ void setup() {
 void loop() {
   ArduinoOTA.handle();
   doWiFiManager();
+  logRemote("loop");
   if (!mqttClient.connected()) reconnectMQTT();
   mqttClient.loop();
 
@@ -214,7 +221,7 @@ void doWiFiManager() {
 
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
   bool tail = false;
-  
+  logRemote("onDmxFrame()");
   if(VERBOS_OUTPUT) {
     Serial.print("DMX: Univ: ");
     Serial.print(universe, DEC);
@@ -354,5 +361,11 @@ void publishColorState() {
   if( VERBOS_OUTPUT ) { 
     Serial.printf("Color publish: %s\n", pubOk ? "OK" : "FAIL");
   }
+  logRemote("Color publish");
 }
 
+void logRemote(const String& message) {
+  udp.beginPacket(remote_syslog_ip, remote_syslog_port);
+  udp.print(message);
+  udp.endPacket();
+}
