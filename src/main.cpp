@@ -314,12 +314,11 @@ void readFromDHT() {
     bool tempOk = mqttClient.publish("outdoor-led/temp", tempPayload);
     bool humOk = mqttClient.publish("outdoor-led/humidity", humPayload);
 
-    if( VERBOS_OUTPUT ) { 
+      if( VERBOSE_OUTPUT ) { 
     Serial.printf("Temp publish: %s, Humidity publish: %s\n", tempOk ? "OK" : "FAIL", humOk ? "OK" : "FAIL");
+      }
     }
   }
-
-  
 }
 
 void reconnectMQTT() {
