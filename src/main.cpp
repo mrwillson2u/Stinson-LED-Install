@@ -31,7 +31,7 @@ void publishColorState();
 #define RX_PIN_B 18
 #define ENABLE_PIN_B 23
 
-#define VERBOS_OUTPUT true
+#define VERBOSE_OUTPUT true
 
 byte dataPrefix[] = {149, 1, 250, 0};
 byte outputDataA[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -139,7 +139,7 @@ void loop() {
   
   /*
   Check from the DHT sensor only at the set frequency and 30 seconds after the last artnet command was received
-  so that we are pretty sure artet commands are not going to be send during the DHT read delay (18ms).
+  so that we are pretty sure artnet commands are not going to be send during the DHT read delay (18ms).
   We also have another timer so that we are only reading from the humidity/temperature sensor every 5 minutes.
   */
   if( millis() - dhtReadTimestamp > DHTReadDelay && millis() - artnetLastRecieved > DHTAfterArtnetDelay) {
@@ -212,7 +212,7 @@ void doWiFiManager() {
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
   bool tail = false;
   
-  if(VERBOS_OUTPUT) {
+  if(VERBOSE_OUTPUT) {
     Serial.print("DMX: Univ: ");
     Serial.print(universe, DEC);
     Serial.print(", Seq: ");
@@ -231,26 +231,25 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   for (uint16_t i = 0; i < length; i++)
   {
     
-    if( VERBOS_OUTPUT ) { Serial.print(data[i]); };
+    if( VERBOSE_OUTPUT ) { Serial.print(data[i]); };
 
     if(i < 8) {
-      if( VERBOS_OUTPUT ) { Serial.print(" A: "); };
+      if( VERBOSE_OUTPUT ) { Serial.print(" A: "); };
       outputDataA[i] = data[i];
     }
     else {
-      if( VERBOS_OUTPUT ) { Serial.print(" B: "); };
+      if( VERBOSE_OUTPUT ) { Serial.print(" B: "); };
       outputDataB[i - 8] = data[i];
     }
     
-
-    if( VERBOS_OUTPUT ) { Serial.print(" "); };
+    if( VERBOSE_OUTPUT ) { Serial.print(" "); };
   }
 
-  if (mqttClient.connected()) {
+  if ( mqttIsEnabled() && mqttClient.connected()) {
     publishColorState();
   }
 
-  if( VERBOS_OUTPUT ) { 
+  if( VERBOSE_OUTPUT ) { 
   if (tail) {
     Serial.print("...");
   }
@@ -346,9 +345,10 @@ void publishColorState() {
   snprintf(buffer, sizeof(buffer), "%d,%d,%d,%d,%d,%d,%d,%d",
            outputDataA[0], outputDataA[1], outputDataA[2], outputDataA[3],
            outputDataB[0], outputDataB[1], outputDataB[2], outputDataB[3]);
+           
   bool pubOk = mqttClient.publish("outdoor-led/color", buffer);
 
-  if( VERBOS_OUTPUT ) { 
+  if( VERBOSE_OUTPUT ) { 
     Serial.printf("Color publish: %s\n", pubOk ? "OK" : "FAIL");
   }
 }
