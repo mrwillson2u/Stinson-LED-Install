@@ -8,7 +8,7 @@
 
 #include <dhtnew.h>
 
-DHTNEW mySensor(27);   //  ESP 16    UNO 5    MKR1010 5
+DHTNEW mySensor(27); //  ESP 16    UNO 5    MKR1010 5
 // select which pin will trigger the configuration portal when set to LOW
 #define TRIGGER_PIN 0
 
@@ -21,6 +21,40 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
 void readFromDHT();
 void reconnectMQTT();
 void publishColorState();
+
+// Setting default values for dynamic environment variable
+#ifndef HOSTNAME
+#define HOSTNAME "outdoor-led-control"
+#endif
+
+#ifndef MQTT_IP
+#define MQTT_IP " "
+#endif
+
+#ifndef MQTT_USER
+#define MQTT_USER "user"
+#endif
+
+#ifndef MQTT_PASSWORD
+#define MQTT_PASSWORD "password"
+#endif
+
+#ifndef ENABLE_MQTT
+#define ENABLE_MQTT false
+#endif
+
+bool mqttIsEnabled() {
+  if(ENABLE_MQTT != NULL) {
+    return ENABLE_MQTT;
+  }
+  else if( strcmp(SET_ENABLE_MQTT, "true") == 0 || strcmp(SET_ENABLE_MQTT, "True") == 0 ) {
+    return true;
+  }
+  else {
+    return false;
+  }
+  
+}
 
 
 #define TX_PIN_A 17
@@ -62,13 +96,17 @@ float enclosureTemp = 0;
 float enclosureHumidity = 0;
 
 void setup() {
-
+  
   Serial.begin(115200);
   // Serial.setDebugOutput(true);
   Serial1.begin(38400, SERIAL_8N1, RX_PIN_A, TX_PIN_A);
   Serial2.begin(38400, SERIAL_8N1, RX_PIN_B, TX_PIN_B);
 
-  
+  #ifndef WIFI_SSID
+  #define WIFI_SSID "undefined"
+  #endif
+
+  Serial.println("SSID: " WIFI_SSID);
 
   // WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   // it is a good practice to make sure your code sets wifi mode how you want it.  
@@ -87,7 +125,7 @@ void setup() {
   digitalWrite(ENABLE_PIN_A, HIGH);
   digitalWrite(ENABLE_PIN_B, HIGH);
 
-  wm.setHostname("outdoor-led-control");
+  wm.setHostname(HOSTNAME);
   // wm.setEnableConfigPortal(false);
   // wm.setConfigPortalBlocking(false);
   wm.autoConnect();
@@ -101,15 +139,18 @@ void setup() {
   artnet.setArtDmxCallback(onDmxFrame);
   artnet.begin();
 
-  mqttClient.setServer("10.0.1.154", 1883); // Replace with your MQTT broker IP
-
+  if( mqttIsEnabled() ) {
+    mqttClient.setServer(MQTT_IP, 1883); // Replace with your MQTT broker IP
+  }
 }
 
 void loop() {
   ArduinoOTA.handle();
   doWiFiManager();
-  if (!mqttClient.connected()) reconnectMQTT();
-  mqttClient.loop();
+  if( mqttIsEnabled() ) {
+    if (!mqttClient.connected()) reconnectMQTT();
+    mqttClient.loop();
+  }
 
   // we call the read function inside the loop
   // OTA Handle
@@ -311,11 +352,12 @@ void readFromDHT() {
     dtostrf(enclosureTemp, 5, 2, tempPayload);
     dtostrf(enclosureHumidity, 5, 2, humPayload);
 
-    bool tempOk = mqttClient.publish("outdoor-led/temp", tempPayload);
-    bool humOk = mqttClient.publish("outdoor-led/humidity", humPayload);
+    if( mqttIsEnabled() ) {
+      bool tempOk = mqttClient.publish("outdoor-led/temp", tempPayload);
+      bool humOk = mqttClient.publish("outdoor-led/humidity", humPayload);
 
       if( VERBOSE_OUTPUT ) { 
-    Serial.printf("Temp publish: %s, Humidity publish: %s\n", tempOk ? "OK" : "FAIL", humOk ? "OK" : "FAIL");
+        Serial.printf("Temp publish: %s, Humidity publish: %s\n", tempOk ? "OK" : "FAIL", humOk ? "OK" : "FAIL");
       }
     }
   }
@@ -325,8 +367,8 @@ void reconnectMQTT() {
   static unsigned long reconnectMQTTimer = 0;
   if (!mqttClient.connected() && millis() - reconnectMQTTimer > 5000 ) {
     Serial.print("Attempting MQTT connection...");
-    if (mqttClient.connect("ESP32Client", "<user>", "<password>")) {
-    // if (mqttClient.connect("ESP32Client", "colin", "AZoJQ$:%P5k@\\CgKkHCKjm^MbT.njfY$aL")) {
+    if (mqttClient.connect("ESP32Client", MQTT_USER, MQTT_PASSWORD )) {
+
       Serial.println("connected");
     } else {
       Serial.print("failed, rc=");
