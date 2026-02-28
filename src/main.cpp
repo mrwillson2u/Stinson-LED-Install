@@ -39,23 +39,24 @@ void publishColorState();
 #define MQTT_PASSWORD "password"
 #endif
 
-#ifndef ENABLE_MQTT
-#define ENABLE_MQTT false
+#ifndef MQTT_ENABLED
+#define MQTT_ENABLED false
 #endif
 
 bool mqttIsEnabled() {
-  if(ENABLE_MQTT != NULL) {
-    return ENABLE_MQTT;
-  }
-  else if( strcmp(SET_ENABLE_MQTT, "true") == 0 || strcmp(SET_ENABLE_MQTT, "True") == 0 ) {
-    return true;
-  }
-  else {
-    return false;
-  }
-  
+#ifdef MQTT_ENABLED
+  return (strcmp(MQTT_ENABLED, "true") == 0 || strcmp(MQTT_ENABLED, "True") == 0);
+#else
+  return false;
+#endif
 }
 
+
+
+
+#ifndef WIFI_SSID
+#define WIFI_SSID "undefined"
+#endif
 
 #define TX_PIN_A 17
 #define RX_PIN_A 16
@@ -102,12 +103,10 @@ void setup() {
   Serial1.begin(38400, SERIAL_8N1, RX_PIN_A, TX_PIN_A);
   Serial2.begin(38400, SERIAL_8N1, RX_PIN_B, TX_PIN_B);
 
-  #ifndef WIFI_SSID
-  #define WIFI_SSID "undefined"
-  #endif
+  
 
-  Serial.println("SSID: " WIFI_SSID);
-
+  Serial.printf("SSID: %s\n", WIFI_SSID);
+  Serial.printf("MQTT_PASSWORD: %s\n", MQTT_PASSWORD);
   // WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   // it is a good practice to make sure your code sets wifi mode how you want it.  
 
@@ -291,11 +290,11 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   }
 
   if( VERBOSE_OUTPUT ) { 
-  if (tail) {
-    Serial.print("...");
+    if (tail) {
+      Serial.print("...");
+    }
+    Serial.println();
   }
-  Serial.println();
-}
 }
 
 void readFromDHT() {  
