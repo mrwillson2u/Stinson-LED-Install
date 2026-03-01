@@ -84,7 +84,7 @@ bool mqttIsEnabled() {
 #define IDLE_REFRESH_MS 500
 
 // Max output value sent to LED controllers (clamp to avoid 100% blink/flicker)
-#define MAX_OUTPUT_VALUE 250
+#define MAX_OUTPUT_VALUE 245
 
 // How long to keep full-rate serial output after the last Art-Net frame (ms)
 // Covers the entire fade transition before dropping to idle refresh
@@ -101,6 +101,14 @@ byte outputB[17] = {149, 1, 250, 0};
 // Rate-limiting: only send serial data at full rate when new Art-Net data arrives
 bool dataChanged = false;
 unsigned long lastArtNetFrame = 0; // timestamp of last Art-Net callback
+
+// Bus enable timing: disable after transmission completes
+// 17 bytes * 10 bits/byte / 38400 baud = ~4.43ms, round up to 5ms
+const unsigned long BUS_TX_TIME_MS = 5;
+unsigned long busAWriteTime = 0;
+unsigned long busBWriteTime = 0;
+bool busAEnabled = false;
+bool busBEnabled = false;
 
 // MQTT color publish throttling
 bool colorChanged = false;
@@ -162,8 +170,8 @@ void setup() {
   pinMode(ENABLE_PIN_A, OUTPUT);
   pinMode(ENABLE_PIN_B, OUTPUT);
 
-  digitalWrite(ENABLE_PIN_A, HIGH);
-  digitalWrite(ENABLE_PIN_B, HIGH);
+  digitalWrite(ENABLE_PIN_A, LOW);
+  digitalWrite(ENABLE_PIN_B, LOW);
 
   // Configure static IP if set, otherwise use DHCP
   if (strlen(STATIC_IP) > 0) {
@@ -296,6 +304,16 @@ void loop() {
     }
   }
 
+  // Disable bus enable pins after transmission completes
+  if (busAEnabled && millis() - busAWriteTime >= BUS_TX_TIME_MS) {
+    digitalWrite(ENABLE_PIN_A, LOW);
+    busAEnabled = false;
+  }
+  if (busBEnabled && millis() - busBWriteTime >= BUS_TX_TIME_MS) {
+    digitalWrite(ENABLE_PIN_B, LOW);
+    busBEnabled = false;
+  }
+
   // Throttled MQTT color publish (only when data changed, max once per second)
   if (mqttIsEnabled() && mqttClient.connected() && colorChanged &&
       millis() - lastColorPublish >= COLOR_PUBLISH_INTERVAL) {
@@ -319,16 +337,18 @@ void loop() {
 
 
 void writeToBusA(const byte *dataPacket) {
-  // digitalWrite(ENABLE_PIN_A, HIGH);
-  // delay(1);
+  digitalWrite(ENABLE_PIN_A, HIGH);
   Serial1.write(dataPacket, 17);
+  busAWriteTime = millis();
+  busAEnabled = true;
   artnetLastRecieved = millis();
 }
 
 void writeToBusB(const byte *dataPacket) {
-  // digitalWrite(ENABLE_PIN_B, HIGH);
-  // delay(1);
+  digitalWrite(ENABLE_PIN_B, HIGH);
   Serial2.write(dataPacket, 17);
+  busBWriteTime = millis();
+  busBEnabled = true;
   artnetLastRecieved = millis();
 }
 
