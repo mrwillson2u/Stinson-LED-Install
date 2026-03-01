@@ -18,6 +18,6 @@ print("[extra_script.py] Loaded variables:", env_vars)
 env.Append(CPPDEFINES=[(key, f'\\"{value}\\"') for key, value in env_vars.items()])
 
 
-# Dynamically set upload port
-if "UPLOAD_PORT" in env_vars:
+# Only set upload port for OTA environment (avoids overriding USB uploads)
+if "UPLOAD_PORT" in env_vars and env_vars["UPLOAD_PORT"] and env["PIOENV"] == "esp32_ota":
     env.Replace(UPLOAD_PORT=env_vars["UPLOAD_PORT"])
